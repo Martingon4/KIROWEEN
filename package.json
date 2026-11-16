@@ -18,9 +18,12 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:core": "node --test \"packages/shared/src/*.test.ts\" \"apps/guard/src/policy/*.test.ts\" \"apps/guard/src/approvals/*.test.ts\"",
+    "test:core": "node --test \"packages/shared/src/*.test.ts\" \"apps/guard/src/policy/*.test.ts\" \"apps/guard/src/approvals/*.test.ts\" \"apps/guard/src/core/*.test.ts\" \"apps/guard/src/api/*.test.ts\" \"apps/guard/src/mcp/*.test.ts\" \"apps/demo-store-mcp/src/*.test.ts\"",
     "typecheck:core": "tsc -p tsconfig.core.json",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "start": "node --env-file=.env --experimental-strip-types apps/guard/src/index.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.17.0",

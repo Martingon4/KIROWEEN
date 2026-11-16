@@ -78,3 +78,13 @@ test('money helpers use integer cents', () => {
   assert.equal(isCents(100), true);
   assert.throws(() => formatMoney(1.5, 'USD'));
 });
+
+import { describeAction } from './describe.ts';
+
+test('describeAction renders integer cents as money', () => {
+  assert.equal(
+    describeAction('issue_refund', { orderId: 'ORD-1042', amountCents: 14999, currency: 'USD' }),
+    'Emitir reembolso simulado de USD 149.99 para orden ORD-1042',
+  );
+  assert.equal(describeAction('issue_refund', { amountCents: 1.5 }), 'Emitir reembolso simulado');
+});

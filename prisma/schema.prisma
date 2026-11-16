@@ -1,0 +1,93 @@
+// Esquema de MCP Guard. No existe columna con argumentos en claro: solo resumen saneado y hash.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PolicyRule {
+  id                String   @id
+  name              String
+  upstreamName      String
+  toolName          String
+  effect            String
+  conditionsJson    Json
+  reason            String
+  safePreviewFields String[]
+  enabled           Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model ActionRequest {
+  id                 String       @id
+  publicToolName     String
+  upstreamName       String
+  upstreamToolName   String
+  argumentHash       String
+  redactedPreviewJson Json
+  decision           String
+  status             String
+  ruleId             String?
+  ruleName           String?
+  reason             String
+  requestedAt        DateTime
+  expiresAt          DateTime?
+  decidedAt          DateTime?
+  executedAt         DateTime?
+  approvedBy         String?
+  resultSummary      String?
+  errorCode          String?
+  durationMs         Int?
+  events             AuditEvent[]
+
+  @@index([status])
+  @@index([publicToolName])
+  @@index([requestedAt])
+}
+
+model AuditEvent {
+  id              String        @id @default(uuid())
+  actionRequestId String
+  eventType       String
+  actor           String
+  detailsJson     Json
+  createdAt       DateTime      @default(now())
+  actionRequest   ActionRequest @relation(fields: [actionRequestId], references: [id])
+
+  @@index([actionRequestId])
+}
+
+// Datos simulados de la tienda demo. Sin tarjetas ni datos reales.
+model DemoOrder {
+  id           String       @id
+  customerName String
+  status       String
+  currency     String
+  totalCents   Int
+  refunds      DemoRefund[]
+  emails       DemoEmail[]
+}
+
+model DemoRefund {
+  id          String    @id
+  orderId     String
+  amountCents Int
+  reason      String
+  status      String
+  createdAt   DateTime  @default(now())
+  order       DemoOrder @relation(fields: [orderId], references: [id])
+}
+
+model DemoEmail {
+  id        Int       @id @default(autoincrement())
+  orderId   String
+  subject   String
+  body      String
+  status    String
+  createdAt DateTime  @default(now())
+  order     DemoOrder @relation(fields: [orderId], references: [id])
+}
