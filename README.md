@@ -69,13 +69,23 @@ npm install
 cp .env.example .env
 ```
 
-Genere tres secretos distintos y péguelos en `.env` (Guard se niega a arrancar con `change-me` o con menos de 16 caracteres):
+Genere `MCP_GUARD_TOKEN` y `UPSTREAM_TOKEN` y péguelos en `.env` (Guard se niega a arrancar con `change-me` o con menos de 16 caracteres):
 
 ```bash
 openssl rand -hex 32   # MCP_GUARD_TOKEN
 openssl rand -hex 32   # UPSTREAM_TOKEN
-openssl rand -hex 32   # DASHBOARD_ADMIN_SECRET
 ```
+
+El secreto del panel (`DASHBOARD_ADMIN_SECRET`) **no** debe estar en el `.env` que lee el entorno del agente. Guárdelo en un archivo propio con permisos 600, fuera del repositorio, y apunte a él con `DASHBOARD_ADMIN_SECRET_FILE` (Guard se niega a leerlo si es legible por grupo u otros):
+
+```bash
+mkdir -p ~/.config/mcp-guard && umask 077
+openssl rand -hex 32 > ~/.config/mcp-guard/admin-secret
+chmod 600 ~/.config/mcp-guard/admin-secret
+# en .env: DASHBOARD_ADMIN_SECRET_FILE=/home/usuario/.config/mcp-guard/admin-secret
+```
+
+Riesgo residual: un agente con shell que corra con su mismo usuario de sistema puede leer ese archivo. Para separar de verdad al agente del revisor, ejecútelo con otro usuario o en un contenedor sin acceso a ese directorio. No use `grep` sobre el `.env` completo en el entorno del agente; el comando de abajo extrae solo `MCP_GUARD_TOKEN`.
 
 Sin `openssl`: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 
@@ -88,19 +98,17 @@ npm run db:migrate
 npm run build -w @mcp-guard/dashboard
 ```
 
-Después abra dos terminales, una por proceso:
+Después arranque los tres procesos a la vez (tienda demo en `127.0.0.1:3001`, Guard y panel en `127.0.0.1:3000`, panel con recarga en caliente en `127.0.0.1:5173`):
 
 ```bash
-# terminal 1: tienda demo en 127.0.0.1:3001
-npm run dev -w @mcp-guard/demo-store-mcp
-
-# terminal 2: Guard y panel en 127.0.0.1:3000 (sirve apps/dashboard/dist si existe)
-npm run dev -w @mcp-guard/guard
+npm run dev
 ```
+
+`npm run dev` ejecuta `scripts/dev.mjs` (sin dependencias de terceros). Si un proceso termina, detiene los demás. También puede lanzarlos por separado con `npm run dev -w @mcp-guard/demo-store-mcp`, `-w @mcp-guard/guard` y `-w @mcp-guard/dashboard`.
 
 Compruebe que responde: `curl http://127.0.0.1:3000/api/health`.
 
-Nota: `npm run dev` en la raíz ejecuta `dev` en todos los workspaces uno tras otro, y el servidor de Vite no termina, por lo que los demás no llegarían a arrancar. Use los comandos por workspace de arriba. Para desarrollar el panel con recarga en caliente, ejecute además `npm run dev -w @mcp-guard/dashboard` y abra `http://127.0.0.1:5173/` (su origen ya está en `PANEL_ALLOWED_ORIGINS`).
+Para el desarrollo del panel abra `http://127.0.0.1:5173/` (su origen ya está en `PANEL_ALLOWED_ORIGINS`; el proxy de Vite reescribe `Host` a `127.0.0.1:3000` para pasar la validación de Guard).
 
 ### Scripts de `package.json` (raíz)
 
@@ -127,7 +135,8 @@ Nota: `npm run dev` en la raíz ejecuta `dev` en todos los workspaces uno tras o
 | `POLICY_FILE`             | `config/policy.example.yaml`                           | Reglas YAML, validadas al iniciar                                     |
 | `MCP_GUARD_TOKEN`         | `change-me` (debe cambiarse)                           | Bearer que Kiro envía a `/mcp`                                        |
 | `UPSTREAM_TOKEN`          | `change-me` (debe cambiarse)                           | Secreto compartido entre Guard y la tienda demo                       |
-| `DASHBOARD_ADMIN_SECRET`  | `change-me` (debe cambiarse)                           | Contraseña de inicio de sesión del panel. El agente no debe conocerla |
+| `DASHBOARD_ADMIN_SECRET_FILE` | sin definir (recomendado)                          | Ruta a un archivo 600 con la contraseña del panel, fuera del `.env`   |
+| `DASHBOARD_ADMIN_SECRET`  | sin definir                                            | Alternativa en línea a lo anterior. El agente no debe conocerla       |
 | `PANEL_ALLOWED_ORIGINS`   | `http://127.0.0.1:3000,http://127.0.0.1:5173`          | Orígenes exactos permitidos para el panel                             |
 | `DEMO_MODE`               | `true`                                                 | Habilita `POST /api/demo/reset`                                       |
 
@@ -196,7 +205,7 @@ Modelo de amenazas: [docs/threat-model.md](docs/threat-model.md).
 
 MCP Guard sits between an AI agent (Kiro) and MCP servers. Every `tools/call` is matched deterministically (no LLM) against explicit YAML rules: **allow**, **require human approval** (paused in an inbox, executed exactly once after an authenticated click, bound to a SHA-256 hash of the exact call), or **deny** (default). Everything is audited with a reason and without secrets or plaintext arguments. The demo store, orders and refunds are simulated; there is no real money.
 
-Quick start: `npm install`, `cp .env.example .env`, generate three secrets with `openssl rand -hex 32` (`MCP_GUARD_TOKEN`, `UPSTREAM_TOKEN`, `DASHBOARD_ADMIN_SECRET`), `docker compose up -d db`, `npm run db:generate`, `npm run db:migrate`, `npm run build -w @mcp-guard/dashboard`, then run `npm run dev -w @mcp-guard/demo-store-mcp` and `npm run dev -w @mcp-guard/guard` in two terminals. Dashboard and MCP endpoint: `http://127.0.0.1:3000/` and `/mcp`. Connect Kiro with the committed `.kiro/settings/mcp.json` after `export MCP_GUARD_TOKEN=...`. Never connect the demo store directly to Kiro.
+Quick start: `npm install`, `cp .env.example .env`, generate three secrets with `openssl rand -hex 32` (`MCP_GUARD_TOKEN`, `UPSTREAM_TOKEN`) and keep the panel secret in a chmod 600 file referenced by `DASHBOARD_ADMIN_SECRET_FILE`, outside the `.env` the agent can read, `docker compose up -d db`, `npm run db:generate`, `npm run db:migrate`, `npm run build -w @mcp-guard/dashboard`, then run `npm run dev` (starts demo store, Guard and dashboard in parallel). Dashboard and MCP endpoint: `http://127.0.0.1:3000/` and `/mcp`. Connect Kiro with the committed `.kiro/settings/mcp.json` after `export MCP_GUARD_TOKEN=...`. Never connect the demo store directly to Kiro.
 
 Honesty note: the sandbox had no npm registry, Docker or PostgreSQL. The dependency-free core (policy engine, hashing, redaction, approval state machine, core service, HTTP security helpers, demo store) is tested with `npm run test:core`. The Fastify, MCP SDK, Prisma, zod, yaml and React code, the hand-written SQL migration and the Kiro hooks were never compiled or run, and `package-lock.json` still has to be generated by the first `npm install`.
 

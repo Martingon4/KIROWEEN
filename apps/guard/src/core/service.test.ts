@@ -4,7 +4,7 @@ import { ApprovalStore } from '../approvals/index.ts';
 import { blockedEvaluator, evaluate, validatePolicy } from '../policy/index.ts';
 import type { Policy } from '../policy/index.ts';
 import { MemoryRepository } from '../audit/repository.ts';
-import { GuardService } from './service.ts';
+import { GuardService, summarizeContent } from './service.ts';
 import type { UpstreamClient, UpstreamResult } from './service.ts';
 
 const policy: Policy = validatePolicy({
@@ -238,4 +238,65 @@ test('getActionStatus rejects malformed ids and exposes no arguments', async () 
     refund(14999, { reason: 'ZZZ-ARG' }),
   );
   assert.ok(!JSON.stringify(await svc.getActionStatus(out.requestId)).includes('ZZZ-ARG'));
+});
+
+test('summarizeContent keeps identifiers only and drops free text', () => {
+  const text = JSON.stringify({
+    id: 'EML-1',
+    orderId: 'ORD-1042',
+    subject: 'Asunto privado',
+    body: 'CUERPO-SECRETO',
+    reason: 'MOTIVO-SECRETO',
+    status: 'sent',
+  });
+  const s = summarizeContent([{ type: 'text', text }]);
+  assert.equal(s, 'id=EML-1, orderId=ORD-1042, status=sent');
+  assert.ok(!s.includes('SECRETO'));
+  assert.ok(
+    !summarizeContent([{ type: 'text', text: 'texto libre CUERPO-SECRETO' }]).includes('SECRETO'),
+  );
+});
+
+test('approve with a wrong expected hash is rejected and nothing executes', async () => {
+  const { svc, upstream } = setup();
+  const out = await svc.handleToolCall('demo_store.issue_refund', refund(14999));
+  const id = out.requestId as string;
+  const bad = await svc.approve(id, 'demo-reviewer', 'f'.repeat(64));
+  assert.equal(bad.ok, false);
+  assert.equal(upstream.calls.length, 0);
+  const view = await svc.view(id);
+  assert.equal(view?.status, 'pending_approval');
+  const good = await svc.approve(id, 'demo-reviewer', view?.argumentHash);
+  assert.ok(good.ok);
+  assert.equal(upstream.calls.filter((c) => c.tool === 'issue_refund').length, 1);
+});
+
+test('persistence failure after approve resolves to failed and never executes', async () => {
+  const { svc, upstream, repo, store } = setup();
+  const out = await svc.handleToolCall('demo_store.issue_refund', refund(14999));
+  const id = out.requestId as string;
+  const realAdd = repo.addEvent.bind(repo);
+  let failNext = true;
+  repo.addEvent = async (e) => {
+    if (failNext && e.eventType === 'approved') {
+      failNext = false;
+      throw new Error('db down');
+    }
+    return realAdd(e);
+  };
+  const res = await svc.approve(id, 'demo-reviewer');
+  assert.equal(res.ok, false);
+  assert.equal(upstream.calls.length, 0);
+  assert.equal(store.get(id)?.status, 'failed');
+});
+
+test('startup marks stale approved rows failed', async () => {
+  const { svc, repo } = setup();
+  const out = await svc.handleToolCall('demo_store.issue_refund', refund(14999));
+  const id = out.requestId as string;
+  const v = (await repo.getRequest(id))!;
+  await repo.upsertRequest({ ...v, status: 'approved' });
+  await svc.expireOnStartup();
+  assert.equal((await repo.getRequest(id))?.status, 'failed');
+  assert.equal((await repo.getRequest(id))?.errorCode, 'interrupted');
 });

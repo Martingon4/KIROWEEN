@@ -151,6 +151,21 @@ export class PrismaRepository implements Repository {
     return ids;
   }
 
+  async failStaleApproved(now: number): Promise<string[]> {
+    const rows = await this.db.actionRequest.findMany({
+      where: { status: 'approved' },
+      select: { id: true },
+    });
+    const ids = rows.map((r) => r.id);
+    if (ids.length > 0) {
+      await this.db.actionRequest.updateMany({
+        where: { id: { in: ids }, status: 'approved' },
+        data: { status: 'failed', errorCode: 'interrupted', executedAt: new Date(now) },
+      });
+    }
+    return ids;
+  }
+
   async clearAll(): Promise<void> {
     await this.db.$transaction([
       this.db.auditEvent.deleteMany(),

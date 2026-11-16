@@ -60,9 +60,31 @@ export type ReviewResult =
 
 const ID_PATTERN = /^[0-9a-f]{10}$/;
 
+/** Only these upstream fields may reach the stored summary. Free text (body, reason) never does. */
+const SUMMARY_FIELDS = ['id', 'orderId', 'status', 'amountCents', 'currency', 'code'] as const;
+const SAFE_SCALAR = /^[A-Za-z0-9_-]{1,40}$/;
+
+/** Builds the stored result summary from a fixed set of identifier-like fields, never raw text. */
 export function summarizeContent(content: McpContent[]): string {
   const first = content.find((c) => c.type === 'text' && typeof c.text === 'string');
-  return safeErrorSummary(first?.text ?? 'sin contenido');
+  if (!first?.text) return 'sin contenido';
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(first.text);
+  } catch {
+    return 'respuesta sin formato reconocido (contenido omitido)';
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return 'respuesta sin formato reconocido (contenido omitido)';
+  }
+  const obj = parsed as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const key of SUMMARY_FIELDS) {
+    const v = obj[key];
+    if (typeof v === 'number' && Number.isFinite(v)) parts.push(`${key}=${v}`);
+    else if (typeof v === 'string' && SAFE_SCALAR.test(v)) parts.push(`${key}=${v}`);
+  }
+  return parts.length > 0 ? parts.join(', ') : 'respuesta recibida (contenido omitido)';
 }
 
 export class GuardService {
@@ -87,6 +109,12 @@ export class GuardService {
     for (const id of ids) {
       await this.event(id, 'expired', 'system', { cause: 'restart' });
       this.emit(id, 'expired');
+    }
+    // Approved but never completed (crash mid-execution): the outcome is unknown, never retried.
+    const stuck = await this.deps.repo.failStaleApproved(this.now());
+    for (const id of stuck) {
+      await this.event(id, 'failed', 'system', { errorCode: 'interrupted', cause: 'restart' });
+      this.emit(id, 'failed');
     }
     return ids.length;
   }
@@ -254,14 +282,35 @@ export class GuardService {
     };
   }
 
-  async approve(id: string, reviewer: string): Promise<ReviewResult> {
-    const res = this.deps.store.approve(id, reviewer);
+  /**
+   * `expectedHash` is the hash the reviewer saw. When given, the stored call must match it.
+   * If persistence fails after the payload was consumed, nothing is executed and the record
+   * is completed as `failed` so it never stays `approved`.
+   */
+  async approve(id: string, reviewer: string, expectedHash?: string): Promise<ReviewResult> {
+    const res = this.deps.store.approve(id, reviewer, expectedHash);
     if (!res.ok) {
       if (res.record) await this.syncRecord(res.record);
       return { ok: false, error: res.error, request: await this.view(id) };
     }
-    await this.syncRecord(res.record);
-    await this.event(id, 'approved', reviewer, { hash: res.record.argumentHash });
+    try {
+      await this.syncRecord(res.record);
+      await this.event(id, 'approved', reviewer, { hash: res.record.argumentHash });
+    } catch (err) {
+      const done = this.deps.store.markFailed(
+        id,
+        'persistence_error',
+        'No se pudo registrar la aprobacion.',
+      );
+      this.emit(id, 'failed');
+      try {
+        if (done.ok) await this.syncRecord(done.record);
+      } catch {
+        // Database still unavailable: startup recovery marks leftover approved rows failed.
+      }
+      void err;
+      return { ok: false, error: 'persistence_error', request: null };
+    }
     this.emit(id, 'approved');
     // Exactly one execution of the stored call; the store already consumed the payload.
     const out = await this.safeUpstream(res.call.tool, res.call.args as Record<string, unknown>);

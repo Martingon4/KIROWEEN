@@ -92,7 +92,8 @@ export const api = {
       'GET',
       `/api/actions/${id}`,
     ),
-  approve: (id: string) => call<{ request: RequestDto }>('POST', `/api/actions/${id}/approve`),
+  approve: (id: string, expectedHash: string) =>
+    call<{ request: RequestDto }>('POST', `/api/actions/${id}/approve`, { expectedHash }),
   deny: (id: string) => call<{ request: RequestDto }>('POST', `/api/actions/${id}/deny`),
   audit: (q: Record<string, string>) =>
     call<{ requests: RequestDto[] }>('GET', `/api/audit?${new URLSearchParams(q).toString()}`),

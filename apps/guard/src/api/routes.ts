@@ -160,12 +160,28 @@ export function registerApi(app: FastifyInstance, ctx: ApiContext): void {
     if (!s) return reply;
     const { id } = req.params as { id: string };
     if (!ID_PATTERN.test(id)) return reply.code(404).send({ error: 'not_found' });
+    let expectedHash: string | undefined;
+    if (kind === 'approve') {
+      const b = req.body as { expectedHash?: unknown } | null;
+      // The approval must name the exact hash the reviewer saw on screen.
+      if (typeof b?.expectedHash !== 'string' || !/^[0-9a-f]{64}$/.test(b.expectedHash)) {
+        return reply.code(400).send({ error: 'expected_hash_required', request: null });
+      }
+      expectedHash = b.expectedHash;
+    }
     const res =
       kind === 'approve'
-        ? await ctx.service.approve(id, s.reviewer)
+        ? await ctx.service.approve(id, s.reviewer, expectedHash)
         : await ctx.service.deny(id, s.reviewer);
     if (res.ok) return { request: present(res.request) };
-    const code = res.error === 'not_found' ? 404 : res.error === 'expired' ? 410 : 409;
+    const code =
+      res.error === 'not_found'
+        ? 404
+        : res.error === 'expired'
+          ? 410
+          : res.error === 'persistence_error'
+            ? 500
+            : 409;
     return reply.code(code).send({
       error: res.error,
       request: res.request ? present(res.request) : null,

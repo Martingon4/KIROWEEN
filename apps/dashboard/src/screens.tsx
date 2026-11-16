@@ -179,13 +179,14 @@ export function Detail({ id, tick }: { id: string; tick: number }) {
   const r = a.data?.request;
 
   const act = (kind: 'approve' | 'deny') => {
+    if (!r) return;
     const text =
       kind === 'approve'
         ? 'Aprobar y ejecutar esta accion simulada una sola vez?'
         : 'Rechazar esta solicitud? No se ejecutara.';
     if (!window.confirm(text)) return;
     setBusy(true);
-    (kind === 'approve' ? api.approve(id) : api.deny(id))
+    (kind === 'approve' ? api.approve(id, r.argumentHash) : api.deny(id))
       .then(() => setErr(null))
       .catch((e: unknown) =>
         setErr(e instanceof ApiError ? `No se pudo completar (${e.code}).` : 'Error de red.'),

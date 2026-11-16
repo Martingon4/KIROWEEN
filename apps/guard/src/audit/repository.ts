@@ -58,6 +58,8 @@ export interface Repository {
   listEvents(requestId: string): Promise<AuditEventView[]>;
   /** Startup: pending rows from a previous process can never be executed, so mark them expired. */
   expireStalePending(now: number): Promise<string[]>;
+  /** Startup: rows left `approved` by a crashed process never completed. Marks them failed. */
+  failStaleApproved(now: number): Promise<string[]>;
   /** Removes demo history. Only used by the explicit demo reset option. */
   clearAll(): Promise<void>;
 }
@@ -109,6 +111,19 @@ export class MemoryRepository implements Repository {
       if (r.status === 'pending_approval') {
         r.status = 'expired';
         r.decidedAt = now;
+        ids.push(r.id);
+      }
+    }
+    return ids;
+  }
+
+  async failStaleApproved(now: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (const r of this.requests.values()) {
+      if (r.status === 'approved') {
+        r.status = 'failed';
+        r.errorCode = 'interrupted';
+        r.executedAt = now;
         ids.push(r.id);
       }
     }
