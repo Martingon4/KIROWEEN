@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "name": "Formato y typecheck al terminar una tarea",
+  "description": "Tras completar una tarea del spec, ejecuta Prettier y el chequeo de tipos.",
+  "version": "1",
+  "when": { "type": "postTaskExecution" },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se completo una tarea. Ejecuta `npm run format` y `npm run typecheck` (o `tsc --noEmit` si no hay dependencias instaladas). Corrige los errores antes de marcar la tarea como terminada y reporta el resultado."
+  }
+}

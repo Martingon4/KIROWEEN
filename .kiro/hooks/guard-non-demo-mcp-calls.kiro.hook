@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "name": "Pedir confirmacion antes de llamar herramientas MCP fuera de la demo",
+  "description": "Antes de usar cualquier herramienta MCP, verificar que el sistema destino es simulado (demo-store) o el propio mcp-guard.",
+  "version": "1",
+  "when": { "type": "preToolUse", "toolTypes": ["mcp"] },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Antes de ejecutar esta herramienta MCP, verifica que el servidor es `mcp-guard` o que el sistema afectado es la tienda simulada (demo-store). Si la herramienta toca cualquier otro sistema, o si es una operacion de escritura (reembolso, envio de correo) sin pasar por Guard, NO la ejecutes: explica el motivo y pide confirmacion explicita a la persona usuaria. Nunca uses dinero, clientes ni credenciales reales."
+  }
+}
