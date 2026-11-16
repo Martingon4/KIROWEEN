@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Recordar docs y escenarios demo al cambiar esquema o politicas",
+  "description": "Si cambia prisma/schema.prisma o config/policy*.yaml, revisar docs y escenarios A-F.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": ["prisma/schema.prisma", "config/policy*.yaml"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Cambio un esquema o una politica. Revisa si hay que actualizar: la migracion SQL en prisma/migrations, .kiro/specs/mcp-guard/design.md, docs/demo-script.md (escenarios A-F), docs/threat-model.md y los tests del motor de politicas. Lista lo que quede desactualizado y corrigelo."
+  }
+}

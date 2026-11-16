@@ -1,0 +1,36 @@
+{
+  "name": "mcp-guard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP Guard: control, aprobacion humana y auditoria para llamadas de herramientas MCP.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:core": "node --test \"packages/shared/src/*.test.ts\" \"apps/guard/src/policy/*.test.ts\" \"apps/guard/src/approvals/*.test.ts\" \"apps/guard/src/core/*.test.ts\" \"apps/guard/src/api/*.test.ts\" \"apps/guard/src/mcp/*.test.ts\" \"apps/demo-store-mcp/src/*.test.ts\"",
+    "typecheck:core": "tsc -p tsconfig.core.json",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "start": "node --env-file=.env --experimental-strip-types apps/guard/src/index.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.17.0",
+    "eslint": "9.17.0",
+    "prettier": "3.4.2",
+    "@types/node": "22.10.2",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.19.0"
+  }
+}

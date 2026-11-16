@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": [
+    "packages/shared/src/**/*.ts",
+    "apps/guard/src/policy/**/*.ts",
+    "apps/guard/src/approvals/**/*.ts",
+    "apps/guard/src/core/**/*.ts",
+    "apps/guard/src/secret-file.ts",
+    "apps/guard/src/secret-file.test.ts",
+    "apps/guard/src/api/security.ts",
+    "apps/guard/src/api/security.test.ts",
+    "apps/guard/src/audit/**/*.ts",
+    "apps/guard/src/mcp/tools.ts",
+    "apps/demo-store-mcp/src/store.ts",
+    "apps/demo-store-mcp/src/store.test.ts",
+    "apps/guard/src/mcp/results.ts",
+    "apps/guard/src/mcp/results.test.ts"
+  ],
+  "exclude": ["apps/guard/src/policy/loader.ts"]
+}
