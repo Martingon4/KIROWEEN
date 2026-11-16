@@ -1,0 +1,47 @@
+defaultEffect: deny
+rules:
+  - id: read-order
+    upstream: demo-store
+    tool: get_order
+    effect: allow
+    safePreviewFields: [orderId]
+    reason: 'Consulta de orden de solo lectura.'
+  - id: small-refund
+    upstream: demo-store
+    tool: issue_refund
+    effect: allow
+    when:
+      currency: USD
+      amountCents:
+        min: 1
+        max: 2500
+    safePreviewFields: [orderId, amountCents, currency, reason]
+    reason: 'Reembolso pequeño en el entorno simulado.'
+  - id: refund-review
+    upstream: demo-store
+    tool: issue_refund
+    effect: require_approval
+    when:
+      currency: USD
+      amountCents:
+        min: 2501
+        max: 50000
+    safePreviewFields: [orderId, amountCents, currency, reason]
+    reason: 'El monto requiere aprobación humana.'
+  - id: block-large-refund
+    upstream: demo-store
+    tool: issue_refund
+    effect: deny
+    when:
+      amountCents:
+        min: 50001
+    safePreviewFields: [orderId, amountCents, currency]
+    reason: 'El monto supera el límite de demostración.'
+  - id: email-review
+    upstream: demo-store
+    tool: send_customer_email
+    effect: require_approval
+    safePreviewFields: [orderId, subject]
+    reason: 'Todo mensaje a un cliente requiere revisión.'
+approval:
+  ttlSeconds: 180
